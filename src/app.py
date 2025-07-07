@@ -10,6 +10,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import os
 from pathlib import Path
+from pydantic import BaseModel
+from typing import Optional
 
 app = FastAPI(title="Mergington High School API",
               description="API for viewing and signing up for extracurricular activities")
@@ -77,6 +79,17 @@ activities = {
     }
 }
 
+# In-memory schedule database for classes and assignments
+schedules = {}
+
+class ScheduleItem(BaseModel):
+    schedule_id: str
+    title: str
+    type: str  # 'class' or 'assignment'
+    description: Optional[str] = None
+    date: str  # ISO format date string
+    time: Optional[str] = None  # e.g., '10:00 AM - 11:00 AM'
+
 
 @app.get("/")
 def root():
@@ -130,3 +143,36 @@ def unregister_from_activity(activity_name: str, email: str):
     # Remove student
     activity["participants"].remove(email)
     return {"message": f"Unregistered {email} from {activity_name}"}
+
+
+@app.get("/schedules")
+def get_schedules():
+    """Get all schedules (classes and assignments)"""
+    return list(schedules.values())
+
+
+@app.post("/schedules")
+def create_schedule(item: ScheduleItem):
+    """Create a new schedule item"""
+    if item.schedule_id in schedules:
+        raise HTTPException(status_code=400, detail="Schedule ID already exists")
+    schedules[item.schedule_id] = item.dict()
+    return {"message": f"Schedule '{item.title}' created."}
+
+
+@app.put("/schedules/{schedule_id}")
+def update_schedule(schedule_id: str, item: ScheduleItem):
+    """Update an existing schedule item"""
+    if schedule_id not in schedules:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    schedules[schedule_id] = item.dict()
+    return {"message": f"Schedule '{item.title}' updated."}
+
+
+@app.delete("/schedules/{schedule_id}")
+def delete_schedule(schedule_id: str):
+    """Delete a schedule item"""
+    if schedule_id not in schedules:
+        raise HTTPException(status_code=404, detail="Schedule not found")
+    del schedules[schedule_id]
+    return {"message": f"Schedule '{schedule_id}' deleted."}
